@@ -15,8 +15,19 @@ class ArxivSourceConfig(BaseModel):
     days_back: int = 1
 
 
+class HuggingFaceSourceConfig(BaseModel):
+    enabled: bool = False
+
+
+class RssSourceConfig(BaseModel):
+    enabled: bool = False
+    feeds: list[str] = Field(default_factory=list)
+
+
 class SourcesConfig(BaseModel):
     arxiv: ArxivSourceConfig = Field(default_factory=ArxivSourceConfig)
+    huggingface: HuggingFaceSourceConfig = Field(default_factory=HuggingFaceSourceConfig)
+    rss: RssSourceConfig = Field(default_factory=RssSourceConfig)
 
 
 class ScoringTopicsConfig(BaseModel):
@@ -28,6 +39,8 @@ class ScoringConfig(BaseModel):
     relevance_threshold: float = 0.6
     borderline_threshold: float = 0.4
     max_tokens: int = 1024
+    embedding_threshold: float = 0.3
+    novelty_weight: float = 0.4
     topics: ScoringTopicsConfig = Field(default_factory=ScoringTopicsConfig)
 
 

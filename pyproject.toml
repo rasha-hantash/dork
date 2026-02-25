@@ -8,6 +8,7 @@ dependencies = [
     "anthropic>=0.83.0",
     "arxiv>=2.4.0",
     "click>=8.3.1",
+    "feedparser>=6.0.11",
     "gitpython>=3.1.46",
     "httpx>=0.28.1",
     "pydantic>=2.12.5",
