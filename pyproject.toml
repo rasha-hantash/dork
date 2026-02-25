@@ -1,0 +1,18 @@
+[project]
+name = "dork"
+version = "0.1.0"
+description = "AI engineering research paper discovery pipeline"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "anthropic>=0.83.0",
+    "arxiv>=2.4.0",
+    "click>=8.3.1",
+    "gitpython>=3.1.46",
+    "httpx>=0.28.1",
+    "pydantic>=2.12.5",
+    "tomli>=2.4.0",
+]
+
+[project.scripts]
+dork = "dork.__main__:cli"

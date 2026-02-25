@@ -1,0 +1,51 @@
+[general]
+knowledge_base_repo = "/Users/rashasaadeh/workspace/personal/brain-os"
+data_dir = "data"
+log_level = "info"
+
+[sources.arxiv]
+enabled = true
+categories = ["cs.CL", "cs.AI", "cs.LG", "stat.ML", "cs.IR"]
+max_results = 200
+days_back = 1
+
+[scoring]
+model = "claude-sonnet-4-6"
+relevance_threshold = 0.6
+borderline_threshold = 0.4
+max_tokens = 1024
+
+[scoring.topics]
+include = [
+    "prompting",
+    "chain-of-thought",
+    "few-shot",
+    "in-context learning",
+    "evals",
+    "evaluation",
+    "rag",
+    "retrieval-augmented generation",
+    "tool use",
+    "function calling",
+    "inference optimization",
+    "fine-tuning",
+    "rlhf",
+    "guardrails",
+    "safety",
+    "agents",
+    "agentic",
+    "data curation",
+    "synthetic data",
+    "cost optimization",
+    "distillation",
+    "quantization",
+    "context window",
+    "long context",
+    "embeddings",
+    "alignment",
+    "instruction tuning",
+]
+
+[output]
+pr_batch = true
+branch_prefix = "dork/daily"
