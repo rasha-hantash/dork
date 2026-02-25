@@ -34,8 +34,12 @@ class ArxivSource:
             sort_by=arxiv.SortCriterion.SubmittedDate,
         )
 
+        cutoff = date.today() - timedelta(days=self.config.days_back)
         papers: list[CandidatePaper] = []
         for result in self.client.results(search):
+            pub_date = result.published.date()
+            if pub_date < cutoff:
+                continue
             paper = CandidatePaper(
                 source="arxiv",
                 source_id=result.get_short_id(),
@@ -43,7 +47,7 @@ class ArxivSource:
                 authors=[a.name for a in result.authors],
                 abstract=result.summary,
                 url=result.entry_id,
-                published=result.published.date(),
+                published=pub_date,
                 categories=result.categories,
             )
             papers.append(paper)
@@ -52,7 +56,4 @@ class ArxivSource:
         return papers
 
     def _build_query(self) -> str:
-        cat_query = " OR ".join(f"cat:{cat}" for cat in self.config.categories)
-        cutoff = date.today() - timedelta(days=self.config.days_back)
-        date_filter = cutoff.strftime("%Y%m%d")
-        return f"({cat_query}) AND submittedDate:[{date_filter} TO *]"
+        return " OR ".join(f"cat:{cat}" for cat in self.config.categories)

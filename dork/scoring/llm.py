@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 
 import anthropic
@@ -16,13 +15,6 @@ is relevant to practitioners building AI-powered systems.
 
 A paper is relevant if it relates to any of these topics:
 {topics}
-
-You must respond with valid JSON matching this schema:
-{{
-  "score": <float 0-1, where 1 = highly relevant to AI engineering>,
-  "topics": [<list of matching topic strings>],
-  "reasoning": "<1-2 sentence explanation>"
-}}
 
 Be strict: a paper about pure theoretical math or biology that happens to mention "neural" \
 is NOT relevant. Focus on papers that would change how someone builds, deploys, or evaluates \
@@ -47,20 +39,19 @@ class LLMScorer:
 
         log.debug("scoring relevance", extra={"source_id": paper.source_id, "title": paper.title})
 
-        response = self.client.messages.create(
+        response = self.client.messages.parse(
             model=self.config.model,
             max_tokens=self.config.max_tokens,
             system=system,
             messages=[{"role": "user", "content": user_message}],
+            output_format=RelevanceScore,
         )
 
-        text = response.content[0].text
-        try:
-            data = json.loads(text)
-            return RelevanceScore.model_validate(data)
-        except (json.JSONDecodeError, Exception) as e:
-            log.warning("failed to parse relevance score", extra={"error": str(e), "raw": text[:200]})
-            return RelevanceScore(score=0.0, topics=[], reasoning=f"parse error: {e}")
+        if response.parsed_output is not None:
+            return response.parsed_output
+
+        log.warning("failed to parse relevance score", extra={"stop_reason": response.stop_reason})
+        return RelevanceScore(score=0.0, topics=[], reasoning="structured output parse failure")
 
     def score_paper(self, paper: CandidatePaper) -> ScoredPaper:
         relevance = self.score_relevance(paper)
