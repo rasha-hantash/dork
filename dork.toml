@@ -9,11 +9,26 @@ categories = ["cs.CL", "cs.AI", "cs.LG", "stat.ML", "cs.IR"]
 max_results = 200
 days_back = 1
 
+[sources.huggingface]
+enabled = true
+
+[sources.rss]
+enabled = true
+feeds = [
+    "https://www.anthropic.com/feed.xml",
+    "https://openai.com/blog/rss.xml",
+    "https://blog.research.google/feeds/posts/default?alt=rss",
+    "https://ai.meta.com/blog/rss/",
+    "https://bair.berkeley.edu/blog/feed.xml",
+]
+
 [scoring]
 model = "claude-sonnet-4-6"
 relevance_threshold = 0.6
 borderline_threshold = 0.4
 max_tokens = 1024
+embedding_threshold = 0.3
+novelty_weight = 0.4
 
 [scoring.topics]
 include = [
