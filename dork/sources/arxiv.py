@@ -24,9 +24,10 @@ class ArxivSource:
     def name(self) -> str:
         return "arxiv"
 
-    def fetch(self) -> list[CandidatePaper]:
+    def fetch(self, since: date | None = None) -> list[CandidatePaper]:
         query = self._build_query()
-        log.info("fetching arxiv papers", extra={"query": query, "max_results": self.config.max_results})
+        cutoff = since or (date.today() - timedelta(days=self.config.days_back))
+        log.info("fetching arxiv papers", extra={"query": query, "since": cutoff.isoformat(), "max_results": self.config.max_results})
 
         search = arxiv.Search(
             query=query,
@@ -34,7 +35,6 @@ class ArxivSource:
             sort_by=arxiv.SortCriterion.SubmittedDate,
         )
 
-        cutoff = date.today() - timedelta(days=self.config.days_back)
         papers: list[CandidatePaper] = []
         for result in self.client.results(search):
             pub_date = result.published.date()
