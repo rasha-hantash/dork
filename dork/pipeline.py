@@ -13,6 +13,7 @@ from dork.output.pr import create_pr
 from dork.scoring.embeddings import fetch_embedding, max_similarity
 from dork.scoring.llm import LLMScorer
 from dork.scoring.reference_set import ReferenceSet
+from dork.sources.alphaxiv import AlphaXivSource
 from dork.sources.arxiv import ArxivSource
 from dork.sources.hf_papers import HuggingFaceSource
 from dork.sources.rss import RssSource
@@ -49,6 +50,10 @@ def run_pipeline(config: DorkConfig, dry_run: bool = False) -> PipelineRun:
     if config.sources.rss.enabled:
         source_rss = RssSource(config.sources.rss)
         candidates.extend(source_rss.fetch(since=last_run))
+
+    if config.sources.alphaxiv.enabled:
+        source_axiv = AlphaXivSource(config.sources.alphaxiv)
+        candidates.extend(source_axiv.fetch(since=last_run))
 
     run.sources_fetched = len(candidates)
     log.info("fetched candidates", extra={"count": run.sources_fetched})
