@@ -24,10 +24,18 @@ class RssSourceConfig(BaseModel):
     feeds: list[str] = Field(default_factory=list)
 
 
+class AlphaXivSourceConfig(BaseModel):
+    enabled: bool = False
+    sorts: list[str] = Field(default_factory=lambda: ["Hot"])
+    max_results: int = 100
+    days_back: int = 7
+
+
 class SourcesConfig(BaseModel):
     arxiv: ArxivSourceConfig = Field(default_factory=ArxivSourceConfig)
     huggingface: HuggingFaceSourceConfig = Field(default_factory=HuggingFaceSourceConfig)
     rss: RssSourceConfig = Field(default_factory=RssSourceConfig)
+    alphaxiv: AlphaXivSourceConfig = Field(default_factory=AlphaXivSourceConfig)
 
 
 class ScoringTopicsConfig(BaseModel):
