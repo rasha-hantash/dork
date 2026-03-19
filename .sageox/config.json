@@ -1,0 +1,11 @@
+{
+  "config_version": "2",
+  "repo_id": "repo_019d083f-f331-77d7-b56a-c520ffc3d0ca",
+  "repo_remote_hashes": [
+    "sha256:0f0e58d960e0987b5c8f4036ea23957d78706838b0c8c43963884994922632a7"
+  ],
+  "team_id": "team_fv3r5fimg0",
+  "team_name": "Rasha Hantash's Team",
+  "endpoint": "https://sageox.ai",
+  "update_frequency_hours": 24
+}
