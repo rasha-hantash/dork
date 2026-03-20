@@ -1,0 +1,17 @@
+services:
+  freshrss:
+    image: freshrss/freshrss:latest
+    container_name: dork-freshrss
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - freshrss-data:/var/www/FreshRSS/data
+      - freshrss-extensions:/var/www/FreshRSS/extensions
+    environment:
+      TZ: America/New_York
+      CRON_MIN: "1,31"
+
+volumes:
+  freshrss-data:
+  freshrss-extensions:

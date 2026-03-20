@@ -28,6 +28,13 @@ sorts = ["Hot"]
 max_results = 100
 days_back = 7
 
+[sources.freshrss]
+enabled = false
+url = "http://localhost:8080"
+username = ""
+password = ""
+blog_categories = ["blogs"]
+
 [scoring]
 model = "claude-sonnet-4-6"
 relevance_threshold = 0.6
@@ -35,6 +42,9 @@ borderline_threshold = 0.4
 max_tokens = 1024
 embedding_threshold = 0.3
 novelty_weight = 0.4
+
+[scoring.blog]
+value_threshold = 0.5
 
 [scoring.topics]
 include = [
@@ -70,3 +80,4 @@ include = [
 [output]
 pr_batch = true
 branch_prefix = "dork/daily"
+convention_docs_enabled = true

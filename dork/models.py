@@ -31,6 +31,11 @@ def extract_arxiv_version(source_id: str) -> int:
     return 1
 
 
+class ContentType(str, Enum):
+    PAPER = "paper"
+    BLOG = "blog"
+
+
 class Decision(str, Enum):
     ACCEPT = "accept"
     BORDERLINE = "borderline"
@@ -46,6 +51,7 @@ class CandidatePaper(BaseModel):
     url: str
     published: date
     categories: list[str] = Field(default_factory=list)
+    content_type: ContentType = ContentType.PAPER
 
     @property
     def arxiv_id(self) -> str | None:
@@ -77,6 +83,20 @@ class NoveltyScore(BaseModel):
     reasoning: str = ""
 
 
+class BlogValueScore(BaseModel):
+    score: float = Field(ge=0, le=1)
+    actionability: float = Field(ge=0, le=1)
+    depth: float = Field(ge=0, le=1)
+    reasoning: str = ""
+
+
+class ConventionDocEntry(BaseModel):
+    target_doc: str  # relative path in brain-os, e.g. "rust/rust-conventions.md"
+    section: str  # ## heading to append under
+    rule: str  # the convention rule text (markdown)
+    citation_desc: str  # human-readable citation description
+
+
 class ScoredPaper(BaseModel):
     source: str
     source_id: str
@@ -86,6 +106,7 @@ class ScoredPaper(BaseModel):
     url: str
     published: date
     categories: list[str] = Field(default_factory=list)
+    content_type: ContentType = ContentType.PAPER
     relevance: RelevanceScore
     novelty: NoveltyScore | None = None
     decision: Decision

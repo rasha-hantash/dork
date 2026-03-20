@@ -31,15 +31,28 @@ class AlphaXivSourceConfig(BaseModel):
     days_back: int = 7
 
 
+class FreshRssSourceConfig(BaseModel):
+    enabled: bool = False
+    url: str = ""  # FreshRSS base URL, e.g. http://localhost:8080
+    username: str = ""
+    password: str = ""
+    blog_categories: list[str] = Field(default_factory=list)  # categories to tag as BLOG
+
+
 class SourcesConfig(BaseModel):
     arxiv: ArxivSourceConfig = Field(default_factory=ArxivSourceConfig)
     huggingface: HuggingFaceSourceConfig = Field(default_factory=HuggingFaceSourceConfig)
     rss: RssSourceConfig = Field(default_factory=RssSourceConfig)
     alphaxiv: AlphaXivSourceConfig = Field(default_factory=AlphaXivSourceConfig)
+    freshrss: FreshRssSourceConfig = Field(default_factory=FreshRssSourceConfig)
 
 
 class ScoringTopicsConfig(BaseModel):
     include: list[str] = Field(default_factory=list)
+
+
+class BlogScoringConfig(BaseModel):
+    value_threshold: float = 0.5  # minimum value score for blog articles
 
 
 class ScoringConfig(BaseModel):
@@ -50,11 +63,13 @@ class ScoringConfig(BaseModel):
     embedding_threshold: float = 0.3
     novelty_weight: float = 0.4
     topics: ScoringTopicsConfig = Field(default_factory=ScoringTopicsConfig)
+    blog: BlogScoringConfig = Field(default_factory=BlogScoringConfig)
 
 
 class OutputConfig(BaseModel):
     pr_batch: bool = True
     branch_prefix: str = "dork/daily"
+    convention_docs_enabled: bool = True
 
 
 class GeneralConfig(BaseModel):
