@@ -6,7 +6,8 @@ from datetime import datetime
 from pathlib import Path
 
 from dork.config import DorkConfig
-from dork.models import CandidatePaper, Decision, PipelineRun, ScoredPaper
+from dork.models import CandidatePaper, ContentType, ConventionDocEntry, Decision, PipelineRun, ScoredPaper
+from dork.output.convention import extract_convention_entries, write_convention_entries
 from dork.output.index import generate_index
 from dork.output.markdown import generate_markdown, paper_path
 from dork.output.pr import create_pr
@@ -54,6 +55,12 @@ def run_pipeline(config: DorkConfig, dry_run: bool = False) -> PipelineRun:
     if config.sources.alphaxiv.enabled:
         source_axiv = AlphaXivSource(config.sources.alphaxiv)
         candidates.extend(source_axiv.fetch(since=last_run))
+
+    if config.sources.freshrss.enabled:
+        from dork.sources.freshrss import FreshRssSource
+
+        source_frss = FreshRssSource(config.sources.freshrss)
+        candidates.extend(source_frss.fetch(since=last_run))
 
     run.sources_fetched = len(candidates)
     log.info("fetched candidates", extra={"count": run.sources_fetched})
@@ -108,6 +115,11 @@ def run_pipeline(config: DorkConfig, dry_run: bool = False) -> PipelineRun:
     candidate_embeddings: dict[str, list[float]] = {}  # dedup_key -> embedding
 
     for candidate in new_candidates:
+        # Blog articles skip embedding pre-filter
+        if candidate.content_type == ContentType.BLOG:
+            filtered_candidates.append(candidate)
+            continue
+
         arxiv_id = candidate.arxiv_id
         if not arxiv_id or not has_references:
             # No arXiv ID or no reference set → skip pre-filter
@@ -183,6 +195,23 @@ def run_pipeline(config: DorkConfig, dry_run: bool = False) -> PipelineRun:
     kb_path = config.knowledge_base_path
     file_paths: list[Path] = []
 
+    # --- Extract convention doc entries (LLM) ---
+    all_convention_entries: dict[str, list[ConventionDocEntry]] = {}
+    if config.output.convention_docs_enabled:
+        for paper in papers_to_publish:
+            entries = extract_convention_entries(paper, kb_path, config)
+            if entries:
+                modified = write_convention_entries(entries, paper, kb_path)
+                file_paths.extend(modified)
+                for entry in entries:
+                    all_convention_entries.setdefault(entry.target_doc, []).append(entry)
+
+        # Stage index.md if convention docs modified it
+        index_md = kb_path / "index.md"
+        if all_convention_entries and index_md.exists():
+            file_paths.append(index_md)
+
+    # --- Write archive summaries ---
     for paper in papers_to_publish:
         md_content = generate_markdown(paper, config)
         fp = paper_path(paper, kb_path)
@@ -197,7 +226,13 @@ def run_pipeline(config: DorkConfig, dry_run: bool = False) -> PipelineRun:
         file_paths.append(index_path)
 
     # --- PR ---
-    pr_number = create_pr(papers_to_publish, rejected, file_paths, config)
+    pr_number = create_pr(
+        papers_to_publish,
+        rejected,
+        file_paths,
+        config,
+        convention_entries=all_convention_entries or None,
+    )
     run.pr_number = pr_number
 
     run.finished_at = datetime.now()

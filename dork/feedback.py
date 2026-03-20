@@ -10,6 +10,7 @@ from git import Repo
 
 from dork.config import DorkConfig
 from dork.models import ScoredPaper
+from dork.output.convention import extract_convention_entries, write_convention_entries
 from dork.output.index import generate_index
 from dork.output.markdown import generate_markdown, paper_path
 from dork.store import PaperStore
@@ -60,6 +61,19 @@ def run_feedback(config: DorkConfig, pr_number: int) -> list[ScoredPaper]:
     repo.git.checkout(branch)
 
     file_paths: list[Path] = []
+
+    # Extract convention doc entries for feedback-accepted papers
+    if config.output.convention_docs_enabled:
+        for paper in papers:
+            entries = extract_convention_entries(paper, kb_path, config)
+            if entries:
+                modified = write_convention_entries(entries, paper, kb_path)
+                file_paths.extend(modified)
+
+        index_md = kb_path / "index.md"
+        if index_md.exists() and file_paths:
+            file_paths.append(index_md)
+
     for paper in papers:
         md_content = generate_markdown(paper, config)
         fp = paper_path(paper, kb_path)
