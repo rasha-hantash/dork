@@ -61,23 +61,23 @@ def generate_markdown(paper: ScoredPaper, config: DorkConfig) -> str:
 
 
 def paper_path(paper: ScoredPaper, kb_path: Path) -> Path:
+    from dork.models import ContentType
+
     slug = _slugify(paper.title)
     short_id = paper.source_id.replace("/", "-").replace(".", "")
     yy = paper.published.strftime("%Y")
     mm = paper.published.strftime("%m")
-    return kb_path / "papers" / yy / mm / f"{short_id}-{slug}.md"
+    subdir = "articles" if paper.content_type == ContentType.BLOG else "papers"
+    return kb_path / subdir / yy / mm / f"{short_id}-{slug}.md"
 
 
 def _build_frontmatter(paper: ScoredPaper) -> str:
     fm = {
         "title": paper.title,
-        "authors": paper.authors[:10],
         "date": paper.published.isoformat(),
-        "source": paper.source,
-        "source_id": paper.source_id,
-        "url": paper.url,
+        "source_url": paper.url,
+        "content_type": paper.content_type.value,
         "topics": paper.relevance.topics,
-        "relevance_score": round(paper.relevance.score, 2),
     }
     lines = ["---"]
     for key, value in fm.items():

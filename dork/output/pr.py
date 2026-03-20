@@ -8,7 +8,7 @@ from pathlib import Path
 from git import Repo
 
 from dork.config import DorkConfig
-from dork.models import ScoredPaper
+from dork.models import ConventionDocEntry, ScoredPaper
 
 log = logging.getLogger(__name__)
 
@@ -18,6 +18,7 @@ def create_pr(
     rejected: list[ScoredPaper],
     file_paths: list[Path],
     config: DorkConfig,
+    convention_entries: dict[str, list[ConventionDocEntry]] | None = None,
 ) -> int | None:
     kb_path = config.knowledge_base_path
     repo = Repo(str(kb_path))
@@ -31,7 +32,7 @@ def create_pr(
     else:
         repo.git.checkout("-b", branch_name)
 
-    # Stage all paper files
+    # Stage all files (papers, articles, convention docs, index)
     for fp in file_paths:
         rel = fp.relative_to(kb_path)
         repo.index.add([str(rel)])
@@ -42,7 +43,7 @@ def create_pr(
     repo.git.push("origin", branch_name, "--set-upstream")
 
     # Build PR body
-    pr_body = _build_pr_body(papers, rejected)
+    pr_body = _build_pr_body(papers, rejected, convention_entries)
 
     # Create PR via gh CLI
     result = subprocess.run(
@@ -88,23 +89,42 @@ def _get_remote_repo(repo: Repo) -> str:
     return ""
 
 
-def _build_pr_body(accepted: list[ScoredPaper], rejected: list[ScoredPaper]) -> str:
-    lines = ["## Summary\n"]
-    lines.append(f"**{len(accepted)}** papers accepted\n")
+def _build_pr_body(
+    accepted: list[ScoredPaper],
+    rejected: list[ScoredPaper],
+    convention_entries: dict[str, list[ConventionDocEntry]] | None = None,
+) -> str:
+    lines: list[str] = []
+
+    # --- Primary: Convention doc changes ---
+    if convention_entries:
+        total_rules = sum(len(v) for v in convention_entries.values())
+        lines.append("## Convention Doc Updates\n")
+        lines.append(f"**{total_rules}** rules extracted → **{len(convention_entries)}** docs modified\n")
+        for doc_path, entries in convention_entries.items():
+            lines.append(f"### `{doc_path}`")
+            for entry in entries:
+                lines.append(f"- **{entry.section}**: {entry.rule[:120]}")
+            lines.append("")
+
+    # --- Secondary: Archive summaries ---
+    lines.append("<details>")
+    lines.append(f"<summary>Archive: {len(accepted)} papers/articles accepted</summary>\n")
 
     if accepted:
         for p in accepted:
             topics = ", ".join(p.relevance.topics[:3])
             update_badge = f" `UPDATED v{p.previous_version}→v{p.arxiv_version}`" if p.is_update else ""
-            lines.append(f"### [{p.title[:80]}]({p.url}) — {p.relevance.score:.2f}{update_badge}")
+            content_badge = f" `{p.content_type.value}`" if p.content_type.value != "paper" else ""
+            lines.append(f"#### [{p.title[:80]}]({p.url}) — {p.relevance.score:.2f}{update_badge}{content_badge}")
             lines.append(f"**Topics:** {topics}")
             lines.append(f"> {p.relevance.reasoning}\n")
 
-    lines.append("")
+    lines.append("</details>\n")
 
     if rejected:
         lines.append("<details>")
-        lines.append(f"<summary>Rejected papers ({len(rejected)}) — check to accept</summary>\n")
+        lines.append(f"<summary>Rejected ({len(rejected)}) — check to accept</summary>\n")
         for p in rejected:
             lines.append(f"- [ ] `{p.source_id}` **{p.title[:80]}** (score: {p.relevance.score:.2f}) — {p.relevance.reasoning[:100]}")
         lines.append("\n</details>")
