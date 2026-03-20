@@ -165,8 +165,11 @@ include = [
 
 ## Progress
 
-- [ ] Diff 1: FreshRSS setup + Model/Config layer
-- [ ] Diff 2: FreshRSS source adapter
-- [ ] Diff 3: Blog scoring track
-- [ ] Diff 4: Output integration
-- [ ] Verification: end-to-end dry-run test
+### Phase 3 (Convention Doc Output + Blog Pipeline) — 2026-03-20
+
+- [x] Diff 1: Models + Config + docker-compose (2026-03-20)
+- [x] Diff 4: Convention doc output module (2026-03-20)
+- [x] Diff 5: Pipeline integration + PR redesign (2026-03-20)
+- [x] Diff 2: FreshRSS source adapter (2026-03-20)
+- [x] Diff 3: Blog scoring track (2026-03-20)
+- [ ] End-to-end verification (requires FreshRSS + Anthropic API)
