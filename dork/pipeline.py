@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime
+from dataclasses import dataclass, field
+from datetime import date, datetime
 from pathlib import Path
 
 from dork.config import DorkConfig
@@ -22,41 +23,81 @@ from dork.store import PaperStore
 log = logging.getLogger(__name__)
 
 
-def run_pipeline(config: DorkConfig, dry_run: bool = False) -> PipelineRun:
-    run = PipelineRun(
-        run_id=uuid.uuid4().hex[:12],
-        started_at=datetime.now(),
-        dry_run=dry_run,
-    )
+@dataclass
+class FetchResult:
+    """Output of fetch_candidates(): the deterministic, pre-LLM stage.
 
-    store = PaperStore(config.data_path)
-    scorer = LLMScorer(config.scoring)
+    `candidates` is the list ready for downstream scoring (post dedup + pre-filter).
+    The other fields preserve metadata that run_pipeline() needs to wire through
+    to the scoring/output stages without re-running fetch logic.
+    """
+
+    candidates: list[CandidatePaper]
+    candidate_embeddings: dict[str, list[float]] = field(default_factory=dict)
+    version_updates: dict[str, int] = field(default_factory=dict)
+    sources_fetched: int = 0
+    embedding_rejected: int = 0
+
+
+def fetch_candidates(
+    config: DorkConfig,
+    since: date | None = None,
+    *,
+    store: PaperStore | None = None,
+    ref_set: ReferenceSet | None = None,
+) -> FetchResult:
+    """Fetch + dedup + embedding-prefilter. No LLM scoring, no output writes.
+
+    This is the deterministic Python half of the pipeline. Use it directly
+    when you only need a candidate list (e.g. emitting JSON for a Claude
+    session to score). `run_pipeline()` calls this and then handles scoring,
+    markdown generation, and PR creation.
+
+    Args:
+        config: Dork config (sources, embedding threshold, data path).
+        since: Lower bound on publish date. If None, uses the store's last
+            run date (or each source's configured days_back if no prior run).
+        store: Optional PaperStore. Defaults to one rooted at config.data_path.
+            Pass an explicit store to share state across functions.
+        ref_set: Optional ReferenceSet for embedding pre-filter. Defaults to
+            the reference set rooted at config.data_path.
+
+    Returns:
+        FetchResult with the post-prefilter candidate list and bookkeeping
+        the caller needs (embeddings keyed by dedup_key, version updates,
+        counts).
+    """
+    if store is None:
+        store = PaperStore(config.data_path)
+    if ref_set is None:
+        ref_set = ReferenceSet(config.data_path / "reference_set.jsonl")
+
+    if since is None:
+        since = store.last_run_date()
+    if since:
+        log.info("fetching since", extra={"date": since.isoformat()})
 
     # --- Fetch from all enabled sources ---
-    last_run = store.last_run_date()
-    if last_run:
-        log.info("last run date", extra={"date": last_run.isoformat()})
-
     candidates: list[CandidatePaper] = []
 
     if config.sources.arxiv.enabled:
         source = ArxivSource(config.sources.arxiv)
-        candidates.extend(source.fetch(since=last_run))
+        candidates.extend(source.fetch(since=since))
 
     if config.sources.huggingface.enabled:
         source_hf = HuggingFaceSource(config.sources.huggingface)
-        candidates.extend(source_hf.fetch(since=last_run))
+        candidates.extend(source_hf.fetch(since=since))
 
     if config.sources.rss.enabled:
         source_rss = RssSource(config.sources.rss)
-        candidates.extend(source_rss.fetch(since=last_run))
+        candidates.extend(source_rss.fetch(since=since))
 
     if config.sources.alphaxiv.enabled:
         source_axiv = AlphaXivSource(config.sources.alphaxiv)
-        candidates.extend(source_axiv.fetch(since=last_run))
+        candidates.extend(source_axiv.fetch(since=since))
 
-    run.sources_fetched = len(candidates)
-    log.info("fetched candidates", extra={"count": run.sources_fetched})
+    sources_fetched = len(candidates)
+    log.info("fetched candidates", extra={"count": sources_fetched})
 
     # --- Cross-source dedup ---
     seen_dedup_keys: set[str] = set()
@@ -90,22 +131,28 @@ def run_pipeline(config: DorkConfig, dry_run: bool = False) -> PipelineRun:
                 extra={"source_id": c.source_id, "old_version": prev_version, "new_version": c.arxiv_version},
             )
 
-    run.candidates_after_dedup = len(new_candidates)
-    log.info("after dedup", extra={"new": len(new_candidates), "updates": len(version_updates), "dupes": run.sources_fetched - len(new_candidates)})
+    log.info(
+        "after dedup",
+        extra={
+            "new": len(new_candidates),
+            "updates": len(version_updates),
+            "dupes": sources_fetched - len(new_candidates),
+        },
+    )
 
     if not new_candidates:
-        log.info("no new papers to process")
-        run.finished_at = datetime.now()
-        store.append_run(run)
-        return run
+        return FetchResult(
+            candidates=[],
+            sources_fetched=sources_fetched,
+        )
 
     # --- Embedding pre-filter ---
-    ref_set = ReferenceSet(config.data_path / "reference_set.jsonl")
     ref_embeddings = ref_set.embeddings
     has_references = len(ref_embeddings) > 0
 
     filtered_candidates: list[CandidatePaper] = []
     candidate_embeddings: dict[str, list[float]] = {}  # dedup_key -> embedding
+    embedding_rejected = 0
 
     for candidate in new_candidates:
         arxiv_id = candidate.arxiv_id
@@ -128,13 +175,57 @@ def run_pipeline(config: DorkConfig, dry_run: bool = False) -> PipelineRun:
                 "embedding reject",
                 extra={"source_id": candidate.source_id, "similarity": round(similarity, 3)},
             )
-            run.embedding_rejected = (run.embedding_rejected or 0) + 1
+            embedding_rejected += 1
             continue
 
         filtered_candidates.append(candidate)
 
-    if run.embedding_rejected:
-        log.info("embedding pre-filter", extra={"rejected": run.embedding_rejected, "passed": len(filtered_candidates)})
+    if embedding_rejected:
+        log.info(
+            "embedding pre-filter",
+            extra={"rejected": embedding_rejected, "passed": len(filtered_candidates)},
+        )
+
+    return FetchResult(
+        candidates=filtered_candidates,
+        candidate_embeddings=candidate_embeddings,
+        version_updates=version_updates,
+        sources_fetched=sources_fetched,
+        embedding_rejected=embedding_rejected,
+    )
+
+
+def run_pipeline(config: DorkConfig, dry_run: bool = False) -> PipelineRun:
+    run = PipelineRun(
+        run_id=uuid.uuid4().hex[:12],
+        started_at=datetime.now(),
+        dry_run=dry_run,
+    )
+
+    store = PaperStore(config.data_path)
+    scorer = LLMScorer(config.scoring)
+    ref_set = ReferenceSet(config.data_path / "reference_set.jsonl")
+
+    last_run = store.last_run_date()
+    if last_run:
+        log.info("last run date", extra={"date": last_run.isoformat()})
+
+    fetched = fetch_candidates(config, since=last_run, store=store, ref_set=ref_set)
+    filtered_candidates = fetched.candidates
+    candidate_embeddings = fetched.candidate_embeddings
+    version_updates = fetched.version_updates
+
+    run.sources_fetched = fetched.sources_fetched
+    # `candidates_after_dedup` is the count post-store-dedup, pre-prefilter,
+    # which equals filtered + embedding-rejected.
+    run.candidates_after_dedup = len(filtered_candidates) + fetched.embedding_rejected
+    run.embedding_rejected = fetched.embedding_rejected
+
+    if not filtered_candidates:
+        log.info("no candidates to score")
+        run.finished_at = datetime.now()
+        store.append_run(run)
+        return run
 
     # --- Score ---
     scored: list[ScoredPaper] = []

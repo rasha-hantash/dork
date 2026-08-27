@@ -64,6 +64,18 @@ class CandidatePaper(BaseModel):
             return f"arxiv:{aid}"
         return f"{self.source}:{self.source_id}"
 
+    def to_json_dict(self) -> dict:
+        """Serialize to a JSON-safe dict for downstream scorers.
+
+        Includes derived fields (arxiv_id, arxiv_version, dedup_key) so callers
+        don't need to know about dork's pydantic model.
+        """
+        data = self.model_dump(mode="json")
+        data["arxiv_id"] = self.arxiv_id
+        data["arxiv_version"] = self.arxiv_version
+        data["dedup_key"] = self.dedup_key
+        return data
+
 
 class RelevanceScore(BaseModel):
     score: float = Field(ge=0, le=1)
